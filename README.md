@@ -1,2 +1,2 @@
-# data-engineering-zoomcamp
-This repo contains notes and homeworks for the Data Engineering Zoomcamp by Datalks.Club.
+# Data Engineering Zoomcamp 2026
+This repo contains notes and homeworks for the Data Engineering Zoomcamp 2026 by Datalks.Club.
