@@ -42,6 +42,32 @@ wget https://github.com/DataTalksClub/nyc-tlc-data/releases/download/misc/taxi_z
 ```
 ```bash
 # Step 1. Create folder for Postgres to store data in
+
+mkdir ~/ny_taxi_project
+cd ~/ny_taxi_project
+
+# Step 2. Create tables in Postgres
+  psql -h localhost -U root -d ny_taxi
+    
+    # Download CSV and parquet file
+    curl -L -O https://github.com/DataTalksClub/nyc-tlc-data/releases/download/misc/taxi_zone_lookup.csv
+
+    curl -O https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_2025-11.parquet
+
+    # Verify files
+    ls -lh
+    head taxi_zone_lookup.csv
+
+    # Check schema of green_tripdata table (in separate terminal)
+    pip install pandas pyarrow
+    import pandas as pd
+    from sqlalchemy import create_engine
+    engine = create_engine("postgresql://root:root@host.docker.internal:5433/ny_taxi")
+    df = pd.read_parquet("green_tripdata_2025-11.parquet")
+    print(df.dtypes)
+
+# Step 3. Start Postgres
+
 docker run -it --rm \
   -e POSTGRES_USER="root" \
   -e POSTGRES_PASSWORD="root" \
@@ -50,10 +76,79 @@ docker run -it --rm \
   -p 5432:5432 \
   postgres:18
 
-  # Step 2. Create tables in Postgres
-  psql -h localhost -U root -d ny_taxi
+# Check if Postgres is running
+docker ps
 
-  # Step 3. Load this data into Postgres
+# Step 4. Create two tables
+
+    # Enter postgres container:
+    docker exec -it postgres psql -U root -d ny_taxi
+
+    # Create taxi_zones table:
+
+    CREATE TABLE taxi_zones (
+        locationid INTEGER,
+        borough TEXT,
+        zone TEXT,
+        service_zone TEXT
+    );
+
+    # Create green_tripdata table:
+
+    CREATE TABLE green_tripdata (
+        vendorid INTEGER,
+        lpep_pickup_datetime TIMESTAMP,
+        lpep_dropoff_datetime TIMESTAMP,
+        store_and_fwd_flag TEXT,
+        ratecodeid INTEGER,
+        pulocationid INTEGER,
+        dolocationid INTEGER,
+        passenger_count INTEGER,
+        trip_distance FLOAT,
+        fare_amount FLOAT,
+        extra FLOAT,
+        mta_tax FLOAT,
+        tip_amount FLOAT,
+        tolls_amount FLOAT,
+        improvement_surcharge FLOAT,
+        total_amount FLOAT,
+        payment_type INTEGER,
+        trip_type INTEGER,
+        congestion_surcharge FLOAT
+    );
+
+# Step 5. Load data into Postgres
+    # Load taxi_zones (csv)
+        # Copy CSV into container
+        docker cp taxi_zone_lookup.csv postgres:/var/lib/postgresql/taxi_zone_lookup.csv
+        
+        # Run \copy to load data:
+        docker exec -i postgres psql -U root -d ny_taxi -c "\copy taxi_zones FROM '/var/lib/postgresql/taxi_zone_lookup.csv' CSV HEADER;"
+
+        # Verify if loaded successfully:
+        docker exec -it postgres psql -U root -d ny_taxi -c "SELECT COUNT(*) FROM taxi_zones;"
+
+    # Load green_tripdata (parquet)
+        # Run Python container with project folder mounted
+        docker run -it --rm \
+        -v ~/ny_taxi_project:/app \
+        python:3.13 bash
+
+        # Install Python packages
+        pip install pandas pyarrow sqlalchemy psycopg2-binary
+
+        # Create ingestion script
+        /app/ingest_parquet.py:
+        import pandas as pd
+        from sqlalchemy import create_engine
+
+        # Connect to Postgres container and load data
+        engine = create_engine("postgresql://root:root@host.docker.internal:5433/ny_taxi")
+
+
+        df = pd.read_parquet("green_tripdata_2025-11.parquet")
+        df.to_sql("green_tripdata", engine, if_exists="append", index=False)
+
 ```
 
 >Command:
@@ -137,4 +232,16 @@ LIMIT 1
 >Answer:
 ```
 LaGuardia Airport
+```
+
+## Question 7. Terraform Workflow
+Which of the following sequences, respectively, describes the workflow for:
+
+1. Downloading the provider plugins and setting up backend,
+2. Generating proposed changes and auto-executing the plan
+3. Remove all resources managed by terraform
+
+>Answer:
+```
+terraform init, terraform apply -auto-approve, terraform destroy
 ```
